@@ -2,6 +2,7 @@
 
 **Table of contents**
 
+<<<<<<< HEAD
 - [Project Goal](#-project-goal)
 - [What This POC Demonstrates](#-what-this-poc-demonstrates)
 - [Pipeline Architecture & Workflow](#-pipeline-architecture--workflow)
@@ -14,6 +15,12 @@
   - [Test Scripts](#test-scripts)
 - [Outputs & Results](#-outputs--results)
 - [Possible Improvements](#-possible-improvements)
+=======
+- [Getting started](#getting-started)
+	- [Download Docker](#download-docker)
+	- [Download and vectorize datas](#download-and-vectorize-datas)
+	- [Launch the chatbot service](#launch-the-chatbot-service)
+>>>>>>> 9276d5ed7bbe2f93007ab87cdf98f165ea32b3cc
 
 ---
 
@@ -104,6 +111,7 @@ Can take several minutes.
 ```bash
     docker compose --profile chatbot up -d
 ```
+<<<<<<< HEAD
 
 #### Test scripts (optional)
 Local unit and integration tests are available:
@@ -183,3 +191,5 @@ This POC can be extended and enhanced in several ways, based on the following fe
 	- Use lightweight models where high accuracy is not required.
 
 Additional details on the improvement roadmap are available in `project_management_report.doc`
+=======
+>>>>>>> 9276d5ed7bbe2f93007ab87cdf98f165ea32b3cc
