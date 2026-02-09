@@ -64,12 +64,12 @@ The goal is to:
 
   <div style="text-align: center; width: 45%;">
     <h4>Vector Builder Diagram</h4>
-    <img src="./doc/vector_builder_diagram.png" alt="Vector builder diagram" style="width: 100%;">
+    <img src="./doc/vector_builder_diagram.png" alt="Vector builder diagram" width="350">
   </div>
 
   <div style="text-align: center; width: 45%;">
     <h4>Chatbot Orchestrator Diagram</h4>
-    <img src="./doc/chatbot_orchestrator_diagram.png" alt="Chatbot orchestrator diagram" style="width: 100%;">
+    <img src="./doc/chatbot_orchestrator_diagram.png" alt="Chatbot orchestrator diagram" width="350">
   </div>
 
 </div>
