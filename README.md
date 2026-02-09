@@ -14,11 +14,6 @@
   - [Test Scripts](#test-scripts)
 - [Outputs & Results](#-outputs--results)
 - [Possible Improvements](#-possible-improvements)
-=======
-- [Getting started](#getting-started)
-	- [Download Docker](#download-docker)
-	- [Download and vectorize datas](#download-and-vectorize-datas)
-	- [Launch the chatbot service](#launch-the-chatbot-service)
 
 ---
 
