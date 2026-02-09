@@ -89,11 +89,13 @@ The goal is to:
 
 ### Prerequisites
 - Docker Desktop installed
-- Mistral API Key set as environment variable:
-```bash
-export MISTRAL_API_KEY="your_api_key_here"
-```
-or 
+- Mistral API key available, either:
+  - set as an environment variable:
+    ```bash
+    export MISTRAL_API_KEY="your_api_key_here"
+    ```
+  - Copy `.env.example` to `.env` and replace the placeholder with your own API key
+    
 
 ### Start the Services
 #### Download and vectorize datas
@@ -111,7 +113,6 @@ Can take several minutes.
 ```bash
     docker compose --profile chatbot up -d
 ```
-<<<<<<< HEAD
 
 #### Test scripts (optional)
 Local unit and integration tests are available:
@@ -191,5 +192,3 @@ This POC can be extended and enhanced in several ways, based on the following fe
 	- Use lightweight models where high accuracy is not required.
 
 Additional details on the improvement roadmap are available in `project_management_report.doc`
-=======
->>>>>>> 9276d5ed7bbe2f93007ab87cdf98f165ea32b3cc
