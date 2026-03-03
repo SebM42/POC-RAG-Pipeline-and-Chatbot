@@ -1,65 +1,43 @@
-# RAG Pipeline & Chatbot with Mistral and FAISS
+# Conversational AI System — RAG Pipeline & Production Architecture Design
 
-**Table of contents**
-
-- [Project Goal](#-project-goal)
-- [What This POC Demonstrates](#-what-this-poc-demonstrates)
-- [Pipeline Architecture & Workflow](#-pipeline-architecture--workflow)
-  - [Main Steps](#main-steps)
-  - [Pipeline Diagram](#pipeline-diagram)
-- [Tech Stack](#-tech-stack)
-- [Running the Project](#-running-the-project)
-  - [Prerequisites](#prerequisites)
-  - [Start the Services](#start-the-services)
-  - [Test Scripts](#test-scripts)
-- [Outputs & Results](#-outputs--results)
-- [Possible Improvements](#-possible-improvements)
+`Python` `LangChain` `FAISS` `Mistral AI` `FastAPI` `Docker`
 
 ---
 
-## 🎯 Project Goal
-This project is a proof-of-concept (POC) demonstrating a **RAG (Retrieval-Augmented Generation) pipeline** for events data.  
-The goal is to:
-- Fetch public events data from OpenDataSoft.
-- Clean, preprocess, and structure the data for vector embedding.
-- Build FAISS vector indexes for semantic search.
-- Provide a chatbot API capable of answering questions based on the vectorized events data.
+## Overview
+
+Two-part project: a functional RAG pipeline (POC) and a full production architecture design derived from its findings.
+
+The POC implements end-to-end semantic search and conversational AI over French public events data. The architecture study documents the trade-off analysis and technical decisions required to transition the POC to a scalable, production-ready MVP — covering cloud infrastructure, cost modeling, observability, and component modularity.
 
 ---
 
-## 🧠 What This POC Demonstrates
-- End-to-end RAG pipeline with data ingestion, preprocessing, vectorization, and semantic search.
-- Integration of **Mistral embeddings** and FAISS for vector search.
-- Chatbot service exposing a **FastAPI endpoint** for user questions.
-- Practical usage of metadata filtering and structured prompts for generating accurate answers.
-- Unit and integration testing setup to validate pipeline and chatbot functionalities.
+## Part 1 — RAG Pipeline (POC)
+
+### Architecture decisions
+
+**Two-stage LLM pipeline — deliberate separation of concerns.**  
+The pipeline uses two distinct LLM calls by design. The first call focuses exclusively on extracting structured metadata filters from the user's natural language query (location, date, category). The second generates the final answer from the retrieved context. Conflating both into a single call would produce inconsistent results — query understanding and answer generation are fundamentally different tasks that benefit from dedicated prompts and independent testability.
+
+**FAISS FlatL2 + IndexIDMap — exact search, deliberate scope.**  
+FAISS was chosen to keep the stack fully local and dependency-free — no external service, no API cost during development, no network latency. The FlatL2 index guarantees exact nearest-neighbor search (no approximation), which is appropriate at POC scale and makes results fully deterministic. The IndexIDMap wrapper maintains explicit vector-to-event-ID mapping, keeping metadata retrieval clean. The tradeoff is explicit: FlatL2 does not scale beyond a few hundred thousand vectors without linear memory and latency growth. Approximate indexes (IVF, HNSW) and a managed vector DB are identified as the next steps for production (see Part 2).
+
+**Metadata stored separately as a pickle file.**  
+FAISS stores vectors only. Event metadata (title, date, location, URL, category) is stored alongside in a pickle file and loaded at chatbot startup. This avoids re-embedding on each restart and keeps the ingestion and querying services fully decoupled. A production setup replaces pickle with a proper metadata store.
+
+**Single embedding model ecosystem (Mistral).**  
+Both the ingestion pipeline (event embedding) and the chatbot service (query embedding) use the same `mistral-embed` model. Using the same model for both guarantees semantic consistency — the query vector and the indexed event vectors live in the same embedding space. Mixing models would introduce alignment drift and degrade retrieval quality.
+
+**Ingestion and chatbot as separate containerized services.**  
+Ingestion runs once (or on schedule) and writes FAISS + pickle artifacts to a shared volume. The chatbot service loads these artifacts at startup and serves queries independently. This decoupling means: embeddings are not recomputed on chatbot restarts (cost control), ingestion can be re-run without touching the API service, and each service scales independently.
+
+**LLM role deliberately constrained.**  
+The LLM (mistral-small) is used only to extract filters and synthesize the final response from the top-3 retrieved events. It does not perform retrieval itself. This reduces hallucination risk — the LLM works from a bounded, structured context rather than generating from open-ended prompts.
 
 ---
 
-## 🗂️ Pipeline Architecture & Workflow
+### Pipeline
 
-### Main Steps
-1. **Data Ingestion**  
-   Retrieve events from OpenDataSoft API using region and date filters.
-
-2. **Data Cleaning & Transformation**  
-   - Parse JSON fields and dates.
-   - Clean HTML text and concatenate event descriptions.
-   - Transform schedules to datetime objects for vectorization.
-
-3. **Vectorization & Indexing**  
-   - Build embeddings with Mistral API.
-   - Store embeddings in FAISS indexes.
-   - Save associated metadata in a pickle file.
-
-4. **Chatbot Service**  
-   - Load FAISS indexes and metadata.
-   - Receive user questions via API.
-   - Extract filters and queries using system prompts.
-   - Perform vector search + metadata filtering.
-   - Generate final answers using Mistral LLM.
-
-### Pipeline Diagram
 <table>
   <tr>
     <td align="center">
@@ -75,121 +53,83 @@ The goal is to:
 
 ---
 
-## ⚙️ Tech Stack
-- **Python 3.11+**
-- **FAISS** for vector indexing
-- **Mistral API** for embeddings and generation
-- **Pandas / NumPy** for data processing
-- **FastAPI** for serving the chatbot
-- **Docker & Docker Compose** for reproducible services
-- **Pytest** for testing
+### Tech stack
+
+| Layer | Tools |
+|---|---|
+| Data source | OpenDataSoft (REST API) |
+| Embeddings & LLM | Mistral AI (mistral-embed · mistral-small) |
+| Vector index | FAISS (FlatL2 + IndexIDMap) |
+| Orchestration | LangChain |
+| API | FastAPI |
+| Infra | Docker · Docker Compose |
 
 ---
 
-## 🚀 Running the Project
+### Running the project
 
-### Prerequisites
-- Docker Desktop installed
-- Mistral API key available, either:
-  - set as an environment variable:
-    ```bash
-    export MISTRAL_API_KEY="your_api_key_here"
-    ```
-  - Copy `.env.example` to `.env` and replace the placeholder with your own API key
-    
-
-### Start the Services
-#### Download and vectorize datas
-To download data from OpenDataSoft and vectorize them with Mistral API using, use the command line below.
-If you already did this step, you can skip it unless you want to refresh the dataset.
+**Prerequisites:** Docker & Docker Compose, Mistral API key.
 
 ```bash
-    docker compose --profile vb up -d
+cp .env.example .env
+# add MISTRAL_API_KEY
+
+# Step 1 — ingest and index events (run once, or to refresh)
+docker compose --profile vb up -d
+
+# Step 2 — start chatbot API
+docker compose --profile chatbot up -d
 ```
 
-Can take several minutes.
-
-#### Launch the chatbot service
-
-```bash
-    docker compose --profile chatbot up -d
-```
-
-#### Test scripts (optional)
-Local unit and integration tests are available:
-```bash
-# Test vector building functions
-python -m pytest tests/test_build_vectors_functions.py
-
-# Test chatbot service functions
-python -m pytest tests/test_chatbot_service_functions.py
-```
-
-## 📊 Outputs and Results
-After running the pipeline:
-1. Vector indexes are saved under data/indexes/ as .faiss files
-2. Metadata is saved as data/metadata.pkl
-3. Chatbot API listens on http://localhost:8000 with a POST endpoint /ask 
+Swagger available at `http://localhost:8000/docs`
 
 ```json
 POST /ask
-{
-    "user_question": "trouve les prochaines visites de chateaux à Lyon"
-}
-```
-4. Returned JSON includes the final answer generated by Mistral
-```output
-Voici les prochaines visites de châteaux à Lyon, ou des sites historiques similaires :
-
-1. **Stand espaces partenaires – Fort de Vaise**
-   - **Lieu** : Fort de Vaise, 25-27, boulevard Antoine de Saint-Exupéry, 69009 Lyon
-   - **Modalités** : Entrée libre
-   - **Lien** : [Fondation Renaud](http://www.fondation-renaud.com)
-   - **Dates et horaires** :
-     - Samedi 20 septembre 2025 de 10h00 à 18h00
-     - Dimanche 21 septembre 2025 de 10h00 à 18h00
-   - **Description** : Quatre acteurs du patrimoine vous accueillent sur le site du Fort de Vaise pour découvrir leurs actions. Le Fort de Vaise, construit en 1834, fait partie de la première ceinture de défense de Lyon. Vous pourrez rencontrer les organisateurs, découvrir des expositions, des conférences et des animations sur le thème du patrimoine architectural.
-
-Les événements suivants ne correspondent pas exactement à des visites de châteaux, mais sont des visites historiques à Lyon :
-
-1. **Parcours commenté "Le sixième, vous avez dit usines ?..."**
-   - **Lieu** : Place du Maréchal Lyautey face au Café du Pond, Lyon 69006
-   - **Modalités** : 10€, demi-tarif pour les adolescents, gratuit pour les enfants. Règlement en espèces ou chèque sur place. Réservation possible via [parcoursdhistoire.com](https://www.parcoursdhistoire.com)
-   - **Dates et horaires** :
-     - Dimanche 21 septembre 2025 de 14h00 à 16h00
-     - Dimanche 19 octobre 2025 de 14h00 à 16h00
-   - **Description** : Découvrez l'histoire industrielle du 6ème arrondissement de Lyon, un quartier aujourd'hui résidentiel, qui abritait autrefois des usines de renom. Le parcours révèle des bâtiments qui furent des sièges d'entreprises et parfois des lieux de production, certains transformés, d'autres disparus.
+{ "user_question": "trouve les prochaines visites de châteaux à Lyon" }
 ```
 
-Swagger available at http://localhost:8000/docs
+**Unit tests (optional):**
+```bash
+python -m pytest tests/test_build_vectors_functions.py   # unit tests — ingestion functions
+python -m pytest tests/test_chatbot_service_functions.py # unit tests — chatbot service functions
+```
 
-## 🔍 Possible Improvements
-This POC can be extended and enhanced in several ways, based on the following feature roadmap:
-- Open Agenda Data Ingestion:
-	- Add incremental updates and automated scheduling for continuous ingestion.
-	- Support multiple regions and event sources simultaneously.
-- Vector Database & Semantic Search Engine:
-	- Optimize FAISS indexes for faster queries and lower memory usage.
-	- Implement caching strategies to reduce repeated embedding calls.
-	- Add advanced filtering (partial matches, synonyms, multilingual support).
-- RAG Chatbot & Conversational Memory:
-	- Improve context tracking for multi-turn conversations.
-	- Handle long-term memory to remember past user interactions.
-	- Support more complex query understanding and reasoning.
-- Geographic Context:
-	- Automatically detect user location for personalized event suggestions.
-	- Allow filtering by nearby events or custom regions.
-- Backend API & Real-Time Web Search:
-	- Add rate limiting, authentication, and usage monitoring.
-	- Integrate real-time web data to supplement event information.
-- Analytics & Dashboard:
-	- Provide usage statistics, popular queries, and response accuracy metrics.
-	- Visualize event trends and chatbot performance.
-- User Accounts & Notifications:
-	- Enable user-specific preferences and saved searches.
-	- Send targeted notifications for relevant upcoming events.
-- NLP Cost Optimization:
-	- Reduce API calls via batching and vector caching.
-	- Use lightweight models where high accuracy is not required.
+---
 
-Additional details on the improvement roadmap are available in `project_management_report.doc`
+### Known limits (POC scope)
+
+- **No incremental indexing** — adding or removing events requires a full index rebuild.
+- **No multi-turn conversation** — each query is stateless; no session memory.
+- **Basic temporal filtering** — explicit dates work; relative expressions ("next month", "school holidays") are not handled.
+- **FlatL2 does not scale** — linear memory and latency growth beyond ~100k vectors.
+
+---
+
+## Part 2 — Production Architecture Design (POC → MVP)
+
+Derived from POC findings, this study defines the technical architecture for transitioning to a production-ready MVP under the name **Puls-Events** — a platform for real-time cultural event discovery and recommendation across France.
+
+Full documentation: [`project_management_report_fr.docx`](./project_management_report_fr.docx) / [`project_management_report_en.docx`](./project_management_report_en.docx)
+
+### Key architectural decisions
+
+**FAISS → Pinecone (managed vector DB).**  
+FlatL2 is replaced by Pinecone for horizontal scalability, built-in persistence, replication, and native metadata filtering. The POC demonstrated where FAISS hits its ceiling; Pinecone addresses all identified limits without requiring custom index management.
+
+**AWS as primary cloud provider.**  
+Chosen for the breadth and maturity of managed services needed: serverless compute (Lambda), managed Kafka (MSK), container orchestration (App Runner / ECS Fargate), caching (ElastiCache), NoSQL (DynamoDB), and monitoring (CloudWatch). The architecture is designed for progressive migration toward full containerization (ECS/Fargate) if needed.
+
+**Stateless, serverless compute for the RAG orchestrator.**  
+The RAG orchestrator runs as a Lambda function — stateless, auto-scaling, no idle cost. Session context is managed externally (ElastiCache / DynamoDB), not in the compute layer.
+
+**Kafka (MSK) for ingestion decoupling.**  
+Event ingestion (scraping + transformation) publishes to MSK topics. The ingest orchestrator and notification service consume independently. This decouples data freshness from API availability and allows parallel processing of embedding batches.
+
+**Estimated cost baseline:**
+- Fixed infrastructure: ~$335/month (zero-traffic baseline)
+- Per chatbot request: ~$0.021 (dominated by LLM call)
+- Weekly ingestion of 1,000 events: ~$1.13
+
+### MVP Architecture diagram
+
+![MVP architecture](./doc/architecture_dark.png)
